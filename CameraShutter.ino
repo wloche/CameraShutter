@@ -1,5 +1,5 @@
 /*
-  CameraShutter.ino - v1.0.00 - 2016-08-02
+  CameraShutter.ino - v1.0.0 - 2016-08-02
 
   CameraShutter.ino is an Arduino program which control a DSLR to take a picture every x seconds for x minutes.
   
