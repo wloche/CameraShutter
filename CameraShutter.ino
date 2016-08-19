@@ -1,5 +1,5 @@
 /*
-  CameraShutter.ino - v1.0.0 - 2016-08-02
+  CameraShutter.ino - v1.0.1 - 2016-08-02
 
   CameraShutter.ino is an Arduino program which control a DSLR to take a picture every x seconds for x minutes.
   
@@ -49,7 +49,7 @@ unsigned long startedMillis = 0;
 
 #define NB_MENUS 6
 
-//#define debug true
+//#define DEBUG true
 
 String menus[NB_MENUS][5] = {
     // label, default, min, max, unit
@@ -334,7 +334,7 @@ void loop() {
         }
         
         unsigned long currentMillis = millis();
-        if (currentMillis - startedMillis >=  ((long) values[MENU_DELAY] * 1000)) {
+        if (currentMillis - startedMillis >=  ((unsigned long) values[MENU_DELAY] * (unsigned long) 1000)) {
             values[MENU_STATUS] = 2;
             startedMillis = startedMillis - currentMillis;
             menuSetupDisplay(MENU_STATUS);
@@ -359,21 +359,21 @@ void loop() {
             startedMillis = millis();
             
             lpg.setMinValues(startedMillis);
-            lpg.setMaxValue2(startedMillis + values[MENU_INTERVAL] * 1000);
+            lpg.setMaxValue2(startedMillis + (unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000);
 
             //--- Init shooting
             nbPictures = 0;
             shootingStartedMillis = millis();
-            duration = (unsigned int) (values[MENU_DURATION] * 60000);
+            duration = (unsigned long)  values[MENU_DURATION] * (unsigned long) 60000;
 
             lpg.setMaxValue1(startedMillis + duration);
             lpg.draw(startedMillis);
-            
-            Timer1.initialize(values[MENU_INTERVAL] * 1000000);
+
+            Timer1.initialize((unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000000);
             Timer1.attachInterrupt(shootTrigger);
         } else {
           if (!countDownInitiated) {
-            lpg.setRangeValue1(startedMillis, + (long) (startedMillis + values[MENU_DELAY] * 1000));
+            lpg.setRangeValue1(startedMillis, (unsigned long) startedMillis + (unsigned long) values[MENU_DELAY] * (unsigned long) 1000);
             countDownInitiated = true;
           }
           lpg.draw(currentMillis);
@@ -409,7 +409,7 @@ void loop() {
             Serial.print(", duration: ");
             Serial.println(duration);
 #endif
-            lpg.setRangeValue2(startedMillis, startedMillis + values[MENU_INTERVAL] * 1000);
+            lpg.setRangeValue2(startedMillis, startedMillis + (unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000);
         }
         
         lpg.draw(currentMillis);
