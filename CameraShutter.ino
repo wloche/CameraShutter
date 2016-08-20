@@ -29,7 +29,6 @@ AlarmId alarmId[2];
 LiquidCrystal lcd(12, 11, 5, 4, 3, 8);
 LcdProgressBarDouble lpg(&lcd, 1, 16);
 
-const int debugLedPin = LED_BUILTIN; // 13
 const int shutterPin = 6;
 const int focusPin   = 7;
 
@@ -55,8 +54,6 @@ unsigned long startedMillis = 0;
 #define MENU_RESET      5
 
 #define NB_MENUS 6
-
-#define DEBUG true
 
 String menus[NB_MENUS][5] = {
     // label, default, min, max, unit
@@ -110,12 +107,11 @@ void setup()
 
     resetValues();
 
-    pinMode(debugLedPin, OUTPUT);
-    pinMode(shutterPin,  OUTPUT);
-    pinMode(focusPin,    OUTPUT);
+    pinMode(shutterPin, OUTPUT);
+    pinMode(focusPin,   OUTPUT);
 
     digitalWrite(shutterPin, LOW);
-    digitalWrite(focusPin, LOW);
+    digitalWrite(focusPin,   LOW);
 
     lcd.begin(16, 2);
 
@@ -179,13 +175,6 @@ void setMenu(int n)
     lcd.setCursor(0, 0);
     lcd.print(menus[n][0]);
 
-#ifdef DEBUG
-    Serial.print("menusCurrent: ");
-    Serial.print(menusCurrent);
-    Serial.print(" / ");
-    Serial.println(NB_MENUS);
-#endif
-
     menuSetupDisplay(n);
 }
 
@@ -195,11 +184,6 @@ void setMenu(int n)
 void nextMenu()
 {
     menusRequested = (++menusRequested) % NB_MENUS;
-#ifdef DEBUG
-    Serial.print(menusRequested);
-    Serial.print(" / ");
-    Serial.println(NB_MENUS);
-#endif
 }
 
 
@@ -263,44 +247,24 @@ void menuSetup()
 void focus()
 {
     digitalWrite(focusPin, HIGH);
-#ifdef DEBUG
-    Serial.print("focus...");
-#endif
     Alarm.delay(800);
     digitalWrite(focusPin, LOW);
-#ifdef DEBUG
-    Serial.print("/focus...");
-#endif
 }
 
 void shoot()
 {
     if (!isShooting) {
-#ifdef DEBUG
-        Serial.println("SHOOT: NOT in progress");
-#endif
         return;
     }
     
     digitalWrite(shutterPin, HIGH);
-#ifdef DEBUG
-    Serial.println("SHOOT !!!!");
-#endif
     nbPictures++;
 
     Alarm.delay(600);
     digitalWrite(shutterPin, LOW);
-#ifdef DEBUG
-    Serial.println("/SHOOT !!!!");
-#endif
 
     isShooting = false;
 }
-
-
-
-unsigned long duration = 0;
-unsigned long shootingStartedMillis  = 0;
 
 void startShooting()
 {
@@ -310,10 +274,6 @@ void startShooting()
     startedMillis = startedMillis - currentMillis;
     menuSetupDisplay(MENU_STATUS);
 
-#ifdef DEBUG
-    Serial.print("MENU_INTERVAL: ");
-    Serial.println(values[MENU_INTERVAL]);
-#endif
     lcd.setCursor(0, 0);
     lcd.clear();
     lcd.print("Shooting: ");
@@ -334,8 +294,7 @@ void startShooting()
     
     //--- Init shooting
     nbPictures = 0;
-    shootingStartedMillis = millis();
-    duration = (unsigned long)  values[MENU_DURATION] * (unsigned long) 60000;
+    unsigned long duration = (unsigned long)  values[MENU_DURATION] * (unsigned long) 60000;
     
     lpg.setMaxValue1(startedMillis + duration);
     lpg.draw(startedMillis);
@@ -348,14 +307,8 @@ void startShooting()
 void shootTrigger()
 {
     if (isShooting) {
-#ifdef DEBUG
-      Serial.println("SHOOT: already in progress");
-#endif
       return;
     }
-#ifdef DEBUG
-      Serial.println("SHOOT: requested");
-#endif
     isShooting = true;
 }
 
@@ -363,12 +316,6 @@ void stopShooting()
 {
     Alarm.free(alarmId[ALARM_ONCE]);
     Alarm.free(alarmId[ALARM_INTERVAL]);
-
-#ifdef DEBUG
-    Serial.println("Stop the shoot :)");
-    Serial.print(nbPictures);
-    Serial.println(" pictures taken");
-#endif
     
     lcd.clear();
     Alarm.delay(50);
@@ -397,23 +344,12 @@ void loop() {
         // Started
         if (menusRequested != menusCurrent) {
             //--- Menu button pressed: abort shooting
-#ifdef DEBUG
-            Serial.println("### Menu button pressed: abort shooting");
-#endif
             stopShooting();
         } else {
-
             unsigned long currentMillis = millis();
             if (isShooting) {
                 startedMillis = millis();
                 shoot();
-
-#ifdef DEBUG
-                Serial.print("GAP: ");
-                Serial.print(currentMillis - shootingStartedMillis);
-                Serial.print(", duration: ");
-                Serial.println(duration);
-#endif
                 lpg.setRangeValue2(startedMillis, startedMillis + (unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000);
             }
             
