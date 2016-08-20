@@ -1,8 +1,7 @@
 /*
-  CameraShutter.ino - v1.0.1 - 2016-08-02
+  CameraShutter.ino - v1.1.0 - 2016-08-19
 
   CameraShutter.ino is an Arduino program which control a DSLR to take a picture every x seconds for x minutes.
-  
 
   Copyright (c) 2016 Wilfried Loche.  All rights reserved.
 
@@ -13,11 +12,19 @@
 
   See file LICENSE.txt for further informations on licensing terms.
 
-  Depends on LiquidCrystal.h and LcdProgressBarDouble libraries
+  Depends on TimeAlarms.h (hence TimeLib.h) library for Timer purpose (The 1.0.x previous version was based on TimerOne.h lib)
+  Depends on LcdProgressBarDouble.h (hence LiquidCrystal.h) library for progress bar display
 */
-#include <TimerOne.h>
+
+#include <TimeLib.h>
+#include <TimeAlarms.h>
 #include <LiquidCrystal.h>
 #include <LcdProgressBarDouble.h>
+
+/** Alarms  */
+#define ALARM_ONCE 0
+#define ALARM_INTERVAL 1
+AlarmId alarmId[2];
 
 LiquidCrystal lcd(12, 11, 5, 4, 3, 8);
 LcdProgressBarDouble lpg(&lcd, 1, 16);
@@ -35,7 +42,7 @@ int switchMinusState = LOW;
 const int switchPlusPin = A0;
 int switchPlusState = LOW;
 
-const String VERSION = "1.0.0";
+const String VERSION = "1.1.0";
 int nbPictures = 0;
 
 unsigned long startedMillis = 0;
@@ -49,7 +56,7 @@ unsigned long startedMillis = 0;
 
 #define NB_MENUS 6
 
-//#define DEBUG true
+#define DEBUG true
 
 String menus[NB_MENUS][5] = {
     // label, default, min, max, unit
@@ -86,6 +93,17 @@ void resetValues()
     memcpy(values,  defaultValues, sizeof defaultValues);
 }
 
+void welcomeMessage()
+{
+    lcd.setCursor(0, 0);
+    lcd.print("Camera Shutter");
+
+    lcd.setCursor(0, 1);
+    lcd.print("Version " + VERSION);
+
+    delay(1500); 
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -101,26 +119,20 @@ void setup()
 
     lcd.begin(16, 2);
 
-    lcd.setCursor(0, 0);
-    lcd.print("Camera Shutter");
-
-    lcd.setCursor(0, 1);
-    lcd.print("Version " + VERSION);
-
-    delay(1500);
+    welcomeMessage();
 
     attachInterrupt(digitalPinToInterrupt(switchMenuPin), nextMenu, RISING);
     setMenu(menusCurrent);
 }
 
 /*
- * S/W debounce (on plus ans minus buttons)
+ * S/W debounce (on plus and minus buttons)
  */
 boolean debounce(int buttonPin, boolean last)
 {
     boolean current = digitalRead(buttonPin);
     if (current != last) {
-        delay(5);
+        Alarm.delay(5);
         current = digitalRead(buttonPin);
     }
     return current;
@@ -156,7 +168,7 @@ void statusDisplay(long delayMillis)
     lcd.print(statuses[values[MENU_STATUS]]);
     lcd.setCursor(0, 1);
     lcd.print(delayMillis / 1000);
-    delay(200);
+    Alarm.delay(200);
 }
 
 void setMenu(int n)
@@ -254,7 +266,7 @@ void focus()
 #ifdef DEBUG
     Serial.print("focus...");
 #endif
-    delay(800);
+    Alarm.delay(800);
     digitalWrite(focusPin, LOW);
 #ifdef DEBUG
     Serial.print("/focus...");
@@ -276,7 +288,7 @@ void shoot()
 #endif
     nbPictures++;
 
-    delay(600);
+    Alarm.delay(600);
     digitalWrite(shutterPin, LOW);
 #ifdef DEBUG
     Serial.println("/SHOOT !!!!");
@@ -284,6 +296,54 @@ void shoot()
 
     isShooting = false;
 }
+
+
+
+unsigned long duration = 0;
+unsigned long shootingStartedMillis  = 0;
+
+void startShooting()
+{
+    unsigned long currentMillis = millis();
+    
+    values[MENU_STATUS] = 2;
+    startedMillis = startedMillis - currentMillis;
+    menuSetupDisplay(MENU_STATUS);
+
+#ifdef DEBUG
+    Serial.print("MENU_INTERVAL: ");
+    Serial.println(values[MENU_INTERVAL]);
+#endif
+    lcd.setCursor(0, 0);
+    lcd.clear();
+    lcd.print("Shooting: ");
+    lcd.print(values[MENU_DURATION]);
+    lcd.print(menus[MENU_DURATION][4]);
+    
+    lcd.setCursor(0, 1);
+    if (1 == values[MENU_AUTOFOCUS]) {
+        lcd.print("Focussing");
+        focus();
+    }
+    lcd.setCursor(0, 1);
+    lcd.print("Started");
+    startedMillis = millis();
+    
+    lpg.setMinValues(startedMillis);
+    lpg.setMaxValue2(startedMillis + (unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000);
+    
+    //--- Init shooting
+    nbPictures = 0;
+    shootingStartedMillis = millis();
+    duration = (unsigned long)  values[MENU_DURATION] * (unsigned long) 60000;
+    
+    lpg.setMaxValue1(startedMillis + duration);
+    lpg.draw(startedMillis);
+    
+    alarmId[ALARM_INTERVAL] = Alarm.timerRepeat(values[MENU_INTERVAL], shootTrigger);
+    alarmId[ALARM_ONCE]     = Alarm.timerOnce(values[MENU_DURATION] * 60, stopShooting);
+}
+
 
 void shootTrigger()
 {
@@ -293,13 +353,16 @@ void shootTrigger()
 #endif
       return;
     }
+#ifdef DEBUG
+      Serial.println("SHOOT: requested");
+#endif
     isShooting = true;
 }
 
-boolean countDownInitiated = false;
 void stopShooting()
 {
-    Timer1.stop();
+    Alarm.free(alarmId[ALARM_ONCE]);
+    Alarm.free(alarmId[ALARM_INTERVAL]);
 
 #ifdef DEBUG
     Serial.println("Stop the shoot :)");
@@ -308,22 +371,18 @@ void stopShooting()
 #endif
     
     lcd.clear();
-    
+    Alarm.delay(50);
     values[MENU_STATUS] = 0;
     setMenu(MENU_STATUS);
     menusRequested = menusCurrent;
-
-    countDownInitiated = false;
 
     lcd.setCursor(0, 1);
     lcd.print(nbPictures);
     lcd.print(" pictures");
     
-    delay(100);
+    Alarm.delay(100);
 }
 
-unsigned long duration = 0;
-unsigned long shootingStartedMillis  = 0;
 void loop() {
     if (1 == values[MENU_STATUS]) {
         // Count down !!
@@ -331,52 +390,8 @@ void loop() {
         if (menusRequested != menusCurrent) {
             //--- Menu button pressed: abort count down
             stopShooting();
-        }
-        
-        unsigned long currentMillis = millis();
-        if (currentMillis - startedMillis >=  ((unsigned long) values[MENU_DELAY] * (unsigned long) 1000)) {
-            values[MENU_STATUS] = 2;
-            startedMillis = startedMillis - currentMillis;
-            menuSetupDisplay(MENU_STATUS);
-
-#ifdef DEBUG
-            Serial.print("MENU_INTERVAL: ");
-            Serial.println(values[MENU_INTERVAL]);
-#endif
-            lcd.setCursor(0, 0);
-            lcd.clear();
-            lcd.print("Shooting: ");
-            lcd.print(values[MENU_DURATION]);
-            lcd.print(menus[MENU_DURATION][4]);
-
-            lcd.setCursor(0, 1);
-            if (1 == values[MENU_AUTOFOCUS]) {
-                lcd.print("Focussing");
-                focus();
-            }
-            lcd.setCursor(0, 1);
-            lcd.print("Started");
-            startedMillis = millis();
-            
-            lpg.setMinValues(startedMillis);
-            lpg.setMaxValue2(startedMillis + (unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000);
-
-            //--- Init shooting
-            nbPictures = 0;
-            shootingStartedMillis = millis();
-            duration = (unsigned long)  values[MENU_DURATION] * (unsigned long) 60000;
-
-            lpg.setMaxValue1(startedMillis + duration);
-            lpg.draw(startedMillis);
-
-            Timer1.initialize((unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000000);
-            Timer1.attachInterrupt(shootTrigger);
         } else {
-          if (!countDownInitiated) {
-            lpg.setRangeValue1(startedMillis, (unsigned long) startedMillis + (unsigned long) values[MENU_DELAY] * (unsigned long) 1000);
-            countDownInitiated = true;
-          }
-          lpg.draw(currentMillis);
+            lpg.draw(millis());
         }
     } else if (2 == values[MENU_STATUS]) {
         // Started
@@ -386,42 +401,38 @@ void loop() {
             Serial.println("### Menu button pressed: abort shooting");
 #endif
             stopShooting();
-        }
+        } else {
 
-        unsigned long currentMillis = millis();
-        
-        if ((unsigned long)(currentMillis - shootingStartedMillis) >= duration) {
-            //--- Duration's over
-#ifdef DEBUG
-            Serial.println("### Duration's over");
-#endif
-            stopShooting();
-        }
-        //lcdProgressBar((unsigned long)(currentMillis - shootingStartedMillis), duration);
-
-        if (isShooting) {
-            startedMillis = millis();
-            shoot();
+            unsigned long currentMillis = millis();
+            if (isShooting) {
+                startedMillis = millis();
+                shoot();
 
 #ifdef DEBUG
-            Serial.print("GAP: ");
-            Serial.print(currentMillis - shootingStartedMillis);
-            Serial.print(", duration: ");
-            Serial.println(duration);
+                Serial.print("GAP: ");
+                Serial.print(currentMillis - shootingStartedMillis);
+                Serial.print(", duration: ");
+                Serial.println(duration);
 #endif
-            lpg.setRangeValue2(startedMillis, startedMillis + (unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000);
+                lpg.setRangeValue2(startedMillis, startedMillis + (unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000);
+            }
+            
+            lpg.draw(currentMillis);
         }
-        
-        lpg.draw(currentMillis);
     } else {
         // Stopped: play with the setup
         menuSetup();
         if (1 == values[MENU_STATUS]) {
             // just started!
             startedMillis = millis();
+
+            lpg.setRangeValue1(startedMillis, (unsigned long) startedMillis + (unsigned long) values[MENU_DELAY] * (unsigned long) 1000);
+            lpg.disableBar2(); // Do not display the lower bar
+            alarmId[ALARM_ONCE] = Alarm.timerOnce(values[MENU_DELAY], startShooting);
+
             setMenu(MENU_STATUS);
         }
     }
 
-    delay(50);
+    Alarm.delay(50);
 }
