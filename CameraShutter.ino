@@ -15,7 +15,7 @@
   v1.0.x: Depends on TimerOne.h
   v1.1.x: Depends on TimeAlarms.h (hence TimeLib.h) library for Timer purpose (intead of TimerOne.h lib)
           Depends on LcdProgressBarDouble.h (hence LiquidCrystal.h) library for progress bar display
-  v1.2.x: Depends on AnalogMultiButton.h to provide values jump, a single input for 2 buttons and code easier to  (+ v1.1.x deps)
+  v1.2.x: Depends on AnalogMultiButton.h to provide values jump, a single input for 2 buttons and code easier to read (+ v1.1.x deps)
 */
 
 #include <TimeLib.h>
