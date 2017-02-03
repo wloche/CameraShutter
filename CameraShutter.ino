@@ -1,8 +1,7 @@
 /*
-  CameraShutter.ino - v1.0.0 - 2016-08-02
+  CameraShutter.ino - v1.2.0 - 2016-08-24
 
   CameraShutter.ino is an Arduino program which control a DSLR to take a picture every x seconds for x minutes.
-  
 
   Copyright (c) 2016 Wilfried Loche.  All rights reserved.
 
@@ -13,29 +12,43 @@
 
   See file LICENSE.txt for further informations on licensing terms.
 
-  Depends on LiquidCrystal.h and LcdProgressBarDouble libraries
+  v1.0.x: Depends on TimerOne.h
+  v1.1.x: Depends on TimeAlarms.h (hence TimeLib.h) library for Timer purpose (intead of TimerOne.h lib)
+          Depends on LcdProgressBarDouble.h (hence LiquidCrystal.h) library for progress bar display
+  v1.2.x: Depends on AnalogMultiButton.h to provide values jump, a single input for 2 buttons and code easier to read (+ v1.1.x deps)
 */
-#include <TimerOne.h>
+
+#include <TimeLib.h>
+#include <TimeAlarms.h>
 #include <LiquidCrystal.h>
 #include <LcdProgressBarDouble.h>
+#include <AnalogMultiButton.h>
+
+/** Alarms  */
+#define ALARM_ONCE 0
+#define ALARM_INTERVAL 1
+AlarmId alarmId[2];
 
 LiquidCrystal lcd(12, 11, 5, 4, 3, 8);
 LcdProgressBarDouble lpg(&lcd, 1, 16);
 
-const int debugLedPin = LED_BUILTIN; // 13
+
+//--- AnalogMultiButton defs
+const int ANALOG_MULTI_BUTTONS_PIN = A0;
+const int BUTTON_PLUS = 1;
+const int BUTTON_MINUS = 0;
+const int BUTTONS_TOTAL = 3;
+const int BUTTONS_VALUES[BUTTONS_TOTAL] = {0, 300, 400};
+AnalogMultiButton buttons(ANALOG_MULTI_BUTTONS_PIN, BUTTONS_TOTAL, BUTTONS_VALUES);
+//--- /AnalogMultiButton defs
+
 const int shutterPin = 6;
 const int focusPin   = 7;
 
 const int switchMenuPin = 2; // INT0
 int switchMenuState = LOW;
 
-const int switchMinusPin = A1;
-int switchMinusState = LOW;
-
-const int switchPlusPin = A0;
-int switchPlusState = LOW;
-
-const String VERSION = "1.0.0";
+const String VERSION = "1.2.0";
 int nbPictures = 0;
 
 unsigned long startedMillis = 0;
@@ -48,8 +61,6 @@ unsigned long startedMillis = 0;
 #define MENU_RESET      5
 
 #define NB_MENUS 6
-
-//#define debug true
 
 String menus[NB_MENUS][5] = {
     // label, default, min, max, unit
@@ -86,44 +97,34 @@ void resetValues()
     memcpy(values,  defaultValues, sizeof defaultValues);
 }
 
-void setup()
+void welcomeMessage()
 {
-    Serial.begin(115200);
-
-    resetValues();
-
-    pinMode(debugLedPin, OUTPUT);
-    pinMode(shutterPin,  OUTPUT);
-    pinMode(focusPin,    OUTPUT);
-
-    digitalWrite(shutterPin, LOW);
-    digitalWrite(focusPin, LOW);
-
-    lcd.begin(16, 2);
-
     lcd.setCursor(0, 0);
     lcd.print("Camera Shutter");
 
     lcd.setCursor(0, 1);
     lcd.print("Version " + VERSION);
 
-    delay(1500);
+    delay(1500); 
+}
+
+void setup()
+{
+    //Serial.begin(115200);
+    resetValues();
+
+    pinMode(shutterPin, OUTPUT);
+    pinMode(focusPin,   OUTPUT);
+
+    digitalWrite(shutterPin, LOW);
+    digitalWrite(focusPin,   LOW);
+
+    lcd.begin(16, 2);
+
+    welcomeMessage();
 
     attachInterrupt(digitalPinToInterrupt(switchMenuPin), nextMenu, RISING);
     setMenu(menusCurrent);
-}
-
-/*
- * S/W debounce (on plus ans minus buttons)
- */
-boolean debounce(int buttonPin, boolean last)
-{
-    boolean current = digitalRead(buttonPin);
-    if (current != last) {
-        delay(5);
-        current = digitalRead(buttonPin);
-    }
-    return current;
 }
 
 void menuSetupDisplay(int n)
@@ -131,6 +132,9 @@ void menuSetupDisplay(int n)
     lcd.setCursor(0, 1);
     switch (menusCurrent) {
         case MENU_STATUS:
+            if (1 == values[MENU_STATUS]) {
+                lcd.setCursor(0, 0);
+            }
             lcd.print(statuses[values[n]]);
             break;
         case MENU_DELAY:
@@ -140,10 +144,10 @@ void menuSetupDisplay(int n)
             lcd.print(menus[n][4]);
             break;
         case MENU_AUTOFOCUS:
-            lcd.print(values[n] ? "yes (before the series)" : "no");
+            lcd.print(values[n] ? "yes (once)" : "no        ");
             break;
         case MENU_RESET:
-            lcd.print(values[n] ? "yes" : "no");
+            lcd.print(values[n] ? "yes       " : "no        ");
             break;
     }
     lcd.print("    ");
@@ -156,7 +160,7 @@ void statusDisplay(long delayMillis)
     lcd.print(statuses[values[MENU_STATUS]]);
     lcd.setCursor(0, 1);
     lcd.print(delayMillis / 1000);
-    delay(200);
+    Alarm.delay(200);
 }
 
 void setMenu(int n)
@@ -167,13 +171,6 @@ void setMenu(int n)
     lcd.setCursor(0, 0);
     lcd.print(menus[n][0]);
 
-#ifdef DEBUG
-    Serial.print("menusCurrent: ");
-    Serial.print(menusCurrent);
-    Serial.print(" / ");
-    Serial.println(NB_MENUS);
-#endif
-
     menuSetupDisplay(n);
 }
 
@@ -183,11 +180,14 @@ void setMenu(int n)
 void nextMenu()
 {
     menusRequested = (++menusRequested) % NB_MENUS;
-#ifdef DEBUG
+    /*
+    Serial.print("nextMenu has been pressed: =");
     Serial.print(menusRequested);
-    Serial.print(" / ");
-    Serial.println(NB_MENUS);
-#endif
+    Serial.print(",  menusCurrent=");
+    Serial.print(menusCurrent);
+    Serial.print(",  values[MENU_STATUS]=");
+    Serial.println(values[MENU_STATUS]);
+    */
 }
 
 
@@ -198,17 +198,70 @@ void menuSetup()
         setMenu(menusRequested);
     }
 
-    int switchPlusStateCurrent = debounce(switchPlusPin, switchPlusState);
-    if (HIGH == switchPlusStateCurrent && LOW == switchPlusState) {
+    //--- BUTTON_PLUS
+    int incr = 1;
+    if (buttons.isPressedAfter(BUTTON_PLUS, 2000)) {
+        //--- Hyper jump!
+        incr = 20;
+    } else if (buttons.isPressedAfter(BUTTON_PLUS, 500)) {
+        //--- Long jump
+        incr = 5;
+    }
+    if (incr > 1 || buttons.onPress(BUTTON_PLUS)) {
         switch (menusCurrent) {
             case MENU_STATUS:
+            case MENU_AUTOFOCUS:
+            case MENU_RESET:
+                //--- Boolean: no sense to jump over values
+                incr = 1;
+                /* break intentionally avoided */            
             case MENU_DELAY:
             case MENU_DURATION:
             case MENU_INTERVAL:
+                // label, default, min, max, unit
+                //values[menusCurrent] = ((values[menusCurrent] + incr) % ((menus[menusCurrent][3]).toInt() + 1));
+                values[menusCurrent] = values[menusCurrent] + incr;
+                if (values[menusCurrent] > (menus[menusCurrent][3]).toInt()) {
+                    values[menusCurrent] = (menus[menusCurrent][3].toInt());
+                }
+
+                menuSetupDisplay(menusCurrent);
+                break;
+        }
+        /*
+        Serial.print("BUTTON_PLUS,  menusCurrent=");
+        Serial.print(menusCurrent);
+        Serial.print(",  values[menusCurrent]=");
+        Serial.println(values[menusCurrent]);
+        */
+    }
+
+    if (incr > 1) {
+        //--- Relax after a jump :)
+        delay(200);
+    }
+
+    //--- BUTTON_MINUS
+    incr = 1;
+    if (buttons.isPressedAfter(BUTTON_MINUS, 2000)) {
+        //--- Hyper jump!
+        incr = 20;
+    } else if (buttons.isPressedAfter(BUTTON_MINUS, 500)) {
+        //--- Long jump
+        incr = 5;
+    }
+    if (incr > 1 || buttons.onPress(BUTTON_MINUS)) {
+        switch (menusCurrent) {
+            case MENU_STATUS:
             case MENU_AUTOFOCUS:
             case MENU_RESET:
-                // label, default, min, max, unit
-                values[menusCurrent] = ((values[menusCurrent]+1) % ((menus[menusCurrent][3]).toInt() + 1));
+                //--- Boolean: no sense to jump over values
+                incr = 1;
+                /* break intentionally avoided */     
+            case MENU_DELAY:
+            case MENU_DURATION:
+            case MENU_INTERVAL:
+                values[menusCurrent] = values[menusCurrent] - incr; //((values[menusCurrent]+1) % ((menus[menusCurrent][3]).toInt() + 1));
                 if (values[menusCurrent] < (menus[menusCurrent][2]).toInt()) {
                     values[menusCurrent] = (menus[menusCurrent][2].toInt());
                 }
@@ -216,212 +269,155 @@ void menuSetup()
                 menuSetupDisplay(menusCurrent);
                 break;
         }
+        /*
+        Serial.print("BUTTON_MINUS,  menusCurrent=");
+        Serial.print(menusCurrent);
+        Serial.print(",  values[menusCurrent]=");
+        Serial.println(values[menusCurrent]);
+        */
     }
-    switchPlusState = switchPlusStateCurrent;
 
-    int switchMinusStateCurrent = debounce(switchMinusPin, switchMinusState);
-    if (HIGH == switchMinusStateCurrent && LOW == switchMinusState) {
-        switch (menusCurrent) {
-            case MENU_STATUS:
-            case MENU_DELAY:
-            case MENU_DURATION:
-            case MENU_INTERVAL:
-            case MENU_AUTOFOCUS:
-            case MENU_RESET:
-                // label, default, min, max, unit
-                values[menusCurrent] = values[menusCurrent] - 1; //((values[menusCurrent]+1) % ((menus[menusCurrent][3]).toInt() + 1));
-                if (values[menusCurrent] < (menus[menusCurrent][2]).toInt()) {
-                    values[menusCurrent] = (menus[menusCurrent][3].toInt());
-                }
-
-                menuSetupDisplay(menusCurrent);
-                break;
-        }
+    if (incr > 1) {
+        //--- Relax after a jump :)
+        delay(200);
     }
-    switchMinusState = switchMinusStateCurrent;
 
     if (values[MENU_RESET] == 1) {
         //--- Reset has been requested
         resetValues();
         values[MENU_RESET] = 0;
-        //Serial.print("Values reseted");
     }
 }
 
 void focus()
 {
     digitalWrite(focusPin, HIGH);
-#ifdef DEBUG
-    Serial.print("focus...");
-#endif
-    delay(800);
+    Alarm.delay(800);
     digitalWrite(focusPin, LOW);
-#ifdef DEBUG
-    Serial.print("/focus...");
-#endif
 }
 
 void shoot()
 {
     if (!isShooting) {
-#ifdef DEBUG
-        Serial.println("SHOOT: NOT in progress");
-#endif
         return;
     }
     
     digitalWrite(shutterPin, HIGH);
-#ifdef DEBUG
-    Serial.println("SHOOT !!!!");
-#endif
     nbPictures++;
 
-    delay(600);
+    Alarm.delay(600);
     digitalWrite(shutterPin, LOW);
-#ifdef DEBUG
-    Serial.println("/SHOOT !!!!");
-#endif
 
     isShooting = false;
 }
 
+void startShooting()
+{
+    unsigned long currentMillis = millis();
+    
+    values[MENU_STATUS] = 2;
+    startedMillis = startedMillis - currentMillis;
+    menuSetupDisplay(MENU_STATUS);
+
+    lcd.setCursor(0, 0);
+    lcd.clear();
+    lcd.print("Shooting: ");
+    lcd.print(values[MENU_DURATION]);
+    lcd.print(menus[MENU_DURATION][4]);
+    
+    lcd.setCursor(0, 1);
+    if (1 == values[MENU_AUTOFOCUS]) {
+        lcd.print("Focussing");
+        focus();
+    }
+    lcd.setCursor(0, 1);
+    lcd.print("Started");
+    startedMillis = millis();
+    
+    lpg.setMinValues(startedMillis);
+    lpg.setMaxValue2(startedMillis + (unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000);
+    
+    //--- Init shooting
+    nbPictures = 0;
+    unsigned long duration = (unsigned long)  values[MENU_DURATION] * (unsigned long) 60000;
+    
+    lpg.setMaxValue1(startedMillis + duration);
+    lpg.draw(startedMillis);
+    
+    alarmId[ALARM_INTERVAL] = Alarm.timerRepeat(values[MENU_INTERVAL], shootTrigger);
+    alarmId[ALARM_ONCE]     = Alarm.timerOnce(values[MENU_DURATION] * 60, stopShooting);
+}
+
+
 void shootTrigger()
 {
     if (isShooting) {
-#ifdef DEBUG
-      Serial.println("SHOOT: already in progress");
-#endif
       return;
     }
     isShooting = true;
 }
 
-boolean countDownInitiated = false;
 void stopShooting()
 {
-    Timer1.stop();
+    Alarm.free(alarmId[ALARM_ONCE]);
+    Alarm.free(alarmId[ALARM_INTERVAL]);
 
-#ifdef DEBUG
-    Serial.println("Stop the shoot :)");
-    Serial.print(nbPictures);
-    Serial.println(" pictures taken");
-#endif
-    
-    lcd.clear();
-    
+    isShooting = false;
     values[MENU_STATUS] = 0;
-    setMenu(MENU_STATUS);
-    menusRequested = menusCurrent;
 
-    countDownInitiated = false;
+    lcd.clear();
+    menusRequested = MENU_STATUS;
+    setMenu(MENU_STATUS);
+
+    delay(50);
 
     lcd.setCursor(0, 1);
     lcd.print(nbPictures);
     lcd.print(" pictures");
     
-    delay(100);
+    delay(500);
 }
 
-unsigned long duration = 0;
-unsigned long shootingStartedMillis  = 0;
 void loop() {
+    buttons.update();
     if (1 == values[MENU_STATUS]) {
         // Count down !!
 
         if (menusRequested != menusCurrent) {
             //--- Menu button pressed: abort count down
             stopShooting();
-        }
-        
-        unsigned long currentMillis = millis();
-        if (currentMillis - startedMillis >=  ((long) values[MENU_DELAY] * 1000)) {
-            values[MENU_STATUS] = 2;
-            startedMillis = startedMillis - currentMillis;
-            menuSetupDisplay(MENU_STATUS);
-
-#ifdef DEBUG
-            Serial.print("MENU_INTERVAL: ");
-            Serial.println(values[MENU_INTERVAL]);
-#endif
-            lcd.setCursor(0, 0);
-            lcd.clear();
-            lcd.print("Shooting: ");
-            lcd.print(values[MENU_DURATION]);
-            lcd.print(menus[MENU_DURATION][4]);
-
-            lcd.setCursor(0, 1);
-            if (1 == values[MENU_AUTOFOCUS]) {
-                lcd.print("Focussing");
-                focus();
-            }
-            lcd.setCursor(0, 1);
-            lcd.print("Started");
-            startedMillis = millis();
-            
-            lpg.setMinValues(startedMillis);
-            lpg.setMaxValue2(startedMillis + values[MENU_INTERVAL] * 1000);
-
-            //--- Init shooting
-            nbPictures = 0;
-            shootingStartedMillis = millis();
-            duration = (unsigned int) (values[MENU_DURATION] * 60000);
-
-            lpg.setMaxValue1(startedMillis + duration);
-            lpg.draw(startedMillis);
-            
-            Timer1.initialize(values[MENU_INTERVAL] * 1000000);
-            Timer1.attachInterrupt(shootTrigger);
         } else {
-          if (!countDownInitiated) {
-            lpg.setRangeValue1(startedMillis, + (long) (startedMillis + values[MENU_DELAY] * 1000));
-            countDownInitiated = true;
-          }
-          lpg.draw(currentMillis);
+            lpg.draw(millis());
         }
     } else if (2 == values[MENU_STATUS]) {
         // Started
         if (menusRequested != menusCurrent) {
             //--- Menu button pressed: abort shooting
-#ifdef DEBUG
-            Serial.println("### Menu button pressed: abort shooting");
-#endif
             stopShooting();
+        } else {
+            unsigned long currentMillis = millis();
+            if (isShooting) {
+                startedMillis = millis();
+                shoot();
+                lpg.setRangeValue2(startedMillis, startedMillis + (unsigned long) values[MENU_INTERVAL] * (unsigned long) 1000);
+            }
+            
+            lpg.draw(currentMillis);
         }
-
-        unsigned long currentMillis = millis();
-        
-        if ((unsigned long)(currentMillis - shootingStartedMillis) >= duration) {
-            //--- Duration's over
-#ifdef DEBUG
-            Serial.println("### Duration's over");
-#endif
-            stopShooting();
-        }
-        //lcdProgressBar((unsigned long)(currentMillis - shootingStartedMillis), duration);
-
-        if (isShooting) {
-            startedMillis = millis();
-            shoot();
-
-#ifdef DEBUG
-            Serial.print("GAP: ");
-            Serial.print(currentMillis - shootingStartedMillis);
-            Serial.print(", duration: ");
-            Serial.println(duration);
-#endif
-            lpg.setRangeValue2(startedMillis, startedMillis + values[MENU_INTERVAL] * 1000);
-        }
-        
-        lpg.draw(currentMillis);
     } else {
         // Stopped: play with the setup
         menuSetup();
         if (1 == values[MENU_STATUS]) {
-            // just started!
+            // Count down just started!
             startedMillis = millis();
+
+            lpg.setRangeValue1(startedMillis, (unsigned long) startedMillis + (unsigned long) values[MENU_DELAY] * (unsigned long) 1000);
+            lpg.disableBar2(); // Do not display the lower bar
+            alarmId[ALARM_ONCE] = Alarm.timerOnce(values[MENU_DELAY], startShooting);
+
             setMenu(MENU_STATUS);
         }
     }
 
-    delay(50);
+    Alarm.delay(50);
 }
