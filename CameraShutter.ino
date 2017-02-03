@@ -1,5 +1,5 @@
 /*
-  CameraShutter.ino - v1.3.0 - 2017-02-02
+  CameraShutter.ino - v1.3.1 - 2017-02-02
 
   CameraShutter.ino is an Arduino program which control a DSLR to take a picture every x seconds for x minutes.
 
@@ -16,7 +16,8 @@
   v1.1.x: Depends on TimeAlarms.h (hence TimeLib.h) library for Timer purpose (intead of TimerOne.h lib)
           Depends on LcdProgressBarDouble.h '1.0.4' (hence LiquidCrystal.h) library for progress bar display
   v1.2.0: Depends on AnalogMultiButton.h to provide values jump, a single input for 2 buttons and code easier to read (+ v1.1.x deps)
-  v1.3.01: Class CameraShutterMenu to prepare the EEPROM data writing
+  v1.3.0: Class CameraShutterMenu to prepare the EEPROM data writing
+  v1.3.1: Implement CameraShutterSerializable (to prepare the EEPROM data writing)
   v1.3.x: EEPROM usage to store your presets
 */
 
@@ -79,14 +80,19 @@ void setup()
 {
     #ifdef DEBUG
         Serial.begin(115200);
+        while (!Serial) {
+           ; // wait for serial port to connect. Needed for native USB
+        }
     #endif
+    
+    menu.reset();
 
-   /* #ifdef EEPROM_USAGE
-        eepromReadValues();
-    #else*/
-        menu.reset();
-  /* #endif*/
-
+    // Tests
+    // menu.unserialize("00000,00003,00003,03599,00001,");
+    // menu.unserialize("00000,00003,00003,prez");
+    // Serial.print(",  serialize=");
+    // Serial.println(menu.serialize());
+        
     pinMode(shutterPin, OUTPUT);
     pinMode(focusPin,   OUTPUT);
 
@@ -332,6 +338,8 @@ void menuSetup()
             Serial.print(menu.get());
             Serial.print(",  values[menusCurrent]=");
             Serial.print(menu.getValue());
+            Serial.print(",  serialize=");
+            Serial.print(menu.serialize());
             Serial.println("##/menuSetup()##");
         #endif
     }
@@ -384,6 +392,8 @@ void menuSetup()
             Serial.print(menu.get());
             Serial.print(",  values[menusCurrent]=");
             Serial.print(menu.getValue());
+            Serial.print(",  serialize=");
+            Serial.print(menu.serialize());
             Serial.println("##/menuSetup()##");
         #endif
     }

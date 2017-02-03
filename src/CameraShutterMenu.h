@@ -13,16 +13,15 @@
   See file LICENSE.txt for further informations on licensing terms.
  */
 
-//#ifdef CAMERASHUTTER_EEPROM
-
 #ifndef CAMERASHUTTERMENU_H
 #define CAMERASHUTTERMENU_H
 
 #include <stdint.h> // byte def
 #include <Arduino.h>
 
+#include "CameraShutterSerializable.h"
 
-// #define CAMERASHUTTERMENU_DEBUG // Uncomment for debug puppose
+//#define CAMERASHUTTERMENU_DEBUG // Uncomment for debug puppose
 
 #define MENU_CURRENT  100
 #define MENU_STATUS     0
@@ -35,11 +34,7 @@
 
 #define NB_MENUS 7
 
-#define CAMERASHUTTERMENU_DATA_VERSION 1
-
-/*  : public CameraShutterStorable */
-
-class CameraShutterMenu
+class CameraShutterMenu: public CameraShutterSerializable
 {
 
 
@@ -65,6 +60,14 @@ public:
 
 	void incrValue(int incr);
 	void decrValue(int decr);
+
+	/** CameraShutterSerializable implementation */
+	String serialize();
+	bool  unserialize(String data);
+
+protected:
+	/** CameraShutterSerializable implementation */
+	SerializedData serializedData = { .version = 1, .name = "menu" };
 
 private:
 	/** @todo Will: Use a structure... :) */

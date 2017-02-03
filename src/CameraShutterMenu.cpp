@@ -72,7 +72,7 @@ byte CameraShutterMenu::getRequested() {
 void CameraShutterMenu::reset() {
 	memcpy(values, defaultValues, sizeof defaultValues);
 #ifdef CAMERASHUTTERMENU_DEBUG
-	Serial.println("##CameraShutterMenu::reset()## has been pressed: menusRequested=");
+	Serial.println("##CameraShutterMenu::reset()##");
 #endif
 }
 
@@ -117,4 +117,45 @@ void CameraShutterMenu::decrValue(int decr) {
 	Serial.print(values[current]);
 	Serial.println(" ##/CameraShutterMenu::decrValue()##");
 #endif
+}
+
+
+/** CameraShutterSerializable implementation */
+
+String CameraShutterMenu::serialize() {
+	String data = "";
+	char str[6];
+
+	/* Remove the last 2 menus as they have no data: MENU_MANUAL and MENU_RESET */
+	for (byte i = 0; i < NB_MENUS - 2; i++) {
+		sprintf(str, "%05d,", values[i]); // Only positive 2 * 8bits => 2^15 max
+		data = data + String(str);
+	}
+
+	return data;
+}
+
+bool CameraShutterMenu::unserialize(String data) {
+	// Exemple: data="00000,00003,00003,03599,00001,"
+
+	String serializedForm = "%05d,%05d,%05d,%05d,%05d,";
+
+	int tmpValues[NB_MENUS];
+
+	reset();
+	memcpy(tmpValues, values, sizeof values);
+
+	int n = sscanf(data.c_str(), serializedForm.c_str(), &tmpValues[0], &tmpValues[1], &tmpValues[2], &tmpValues[3], &tmpValues[4]);
+	if (n != 5) {
+		//--- 5 integers are expected: do not store them: may be corrupted serialized string
+		#ifdef CAMERASHUTTERMENU_DEBUG
+			Serial.println("Error when unserializing: n=");
+			Serial.println(n);
+		#endif
+		return false;
+	}
+
+	//--- Ensure 5 integers have been decyphered before copying them
+	memcpy(values, tmpValues, sizeof values);
+	return true;
 }
