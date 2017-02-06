@@ -25,6 +25,11 @@ class CameraShutterSerializable
 {
 
 public:
+	struct SerializedData {
+		int version;
+		String name;
+		//String data;
+	};
 
 	virtual String serialize() = 0;
 	virtual bool  unserialize(String data) = 0;
@@ -33,10 +38,6 @@ public:
 	int getVersion();
 
 protected:
-	struct SerializedData {
-		int version;
-		String name;
-	};
 
 	SerializedData serializedData;
 };

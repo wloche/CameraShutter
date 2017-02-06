@@ -15,9 +15,14 @@
 
 #include "CameraShutterMenu.h"
 
-// <<constructor>>
+/**
+ * Constructor
+ *
+ * @todo Will: Why the initiation at the header level doesn't work?!
+ */
 CameraShutterMenu::CameraShutterMenu() {
 	reset();
+	serializedData = { 1, "menu" };
 }
 
 void CameraShutterMenu::set(byte item) {
@@ -132,12 +137,17 @@ String CameraShutterMenu::serialize() {
 		data = data + String(str);
 	}
 
+#ifdef CAMERASHUTTERMENU_DEBUG
+	Serial.print("##CameraShutterMenu::serialize()## has been pressed: data=");
+	Serial.print(data);
+	Serial.println(" ##/CameraShutterMenu::serialize()##");
+#endif
+
 	return data;
 }
 
 bool CameraShutterMenu::unserialize(String data) {
 	// Exemple: data="00000,00003,00003,03599,00001,"
-
 	String serializedForm = "%05d,%05d,%05d,%05d,%05d,";
 
 	int tmpValues[NB_MENUS];

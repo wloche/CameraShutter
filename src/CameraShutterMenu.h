@@ -67,7 +67,8 @@ public:
 
 protected:
 	/** CameraShutterSerializable implementation */
-	SerializedData serializedData = { .version = 1, .name = "menu" };
+	//SerializedData serializedData = { .version = 1, .name = "menu" };
+	//SerializedData serializedData = { 1, "menu" };
 
 private:
 	/** @todo Will: Use a structure... :) */

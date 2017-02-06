@@ -1,5 +1,5 @@
 /*
-  CameraShutter.ino - v1.3.1 - 2017-02-02
+  CameraShutter.ino - v1.4.0 - 2017-02-05
 
   CameraShutter.ino is an Arduino program which control a DSLR to take a picture every x seconds for x minutes.
 
@@ -18,7 +18,7 @@
   v1.2.0: Depends on AnalogMultiButton.h to provide values jump, a single input for 2 buttons and code easier to read (+ v1.1.x deps)
   v1.3.0: Class CameraShutterMenu to prepare the EEPROM data writing
   v1.3.1: Implement CameraShutterSerializable (to prepare the EEPROM data writing)
-  v1.3.x: EEPROM usage to store your presets
+  v1.4.0: EEPROM usage to store your presets
 */
 
 #include <TimeAlarms.h>
@@ -27,10 +27,13 @@
 #include <AnalogMultiButton.h>
 
 //#define EEPROM_USAGE
-#define DEBUG // Comment it out
+//#define DEBUG // Comment it out
 
 #include "src/CameraShutterMenu.h"
 CameraShutterMenu menu;
+
+#include "src/CameraShutterStorage.h"
+CameraShutterStorage storage;
 
 /** Alarms  */
 #define ALARM_ONCE 0
@@ -55,7 +58,7 @@ const int focusPin   = 7;
 const int switchMenuPin = 2; // INT0
 int switchMenuState = LOW;
 
-const String VERSION = "1.3.0";
+const String VERSION = "1.4.0";
 int nbPictures = 0;
 
 unsigned long startedMillis = 0;
@@ -85,7 +88,10 @@ void setup()
         }
     #endif
     
-    menu.reset();
+    storage.add(menu);
+    if (!storage.read()) {
+        menu.reset();
+    }
 
     // Tests
     // menu.unserialize("00000,00003,00003,03599,00001,");
@@ -342,6 +348,9 @@ void menuSetup()
             Serial.print(menu.serialize());
             Serial.println("##/menuSetup()##");
         #endif
+
+        //--- Store the updated setting to EEPROM
+        storage.write();
     }
 
     if (incr > 1) {
@@ -396,6 +405,9 @@ void menuSetup()
             Serial.print(menu.serialize());
             Serial.println("##/menuSetup()##");
         #endif
+
+        //--- Store the updated setting to EEPROM
+        storage.write();
     }
 
     if (incr > 1) {
